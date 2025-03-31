@@ -1,29 +1,41 @@
-using Mono.Cecil;
-using System.IO;
-using Unity.VisualScripting;
 using UnityEngine;
-using UnityEngine.InputSystem.Utilities;
-using static UnityEditor.Searcher.SearcherWindow.Alignment;
 
 public class AntScript : MonoBehaviour
 {
+    // Movement
     [SerializeField] private float moveSpeed;
     private Rigidbody rb;
-    //private Vector3 direction;
+    private Vector3 direction;
+    [SerializeField] ParticleSystem moveParticles;
 
+    // Pickup
     [SerializeField] private GameObject pickUpArms;
     [SerializeField] private GameObject defaultArms;
     public bool pickingUp = false;
-    public bool dropping = false;
     private bool onPickupRange = false;
 
-    RaycastHit hitInfo;
+    // Resources raycast
+    RaycastHit resourceHitInfo;
     [SerializeField] LayerMask layerMask;
     private Vector3 rayPosition;
-    [SerializeField] private Transform antHands; 
-    [SerializeField] private Transform resourceContainer;
+    [SerializeField] private Transform antHands;
+    [SerializeField] private Transform resourceContainer; // objeto padre en drop
     private Transform resourceTrans;
     private Rigidbody resourceRb;
+    private Collider resourceCol;
+
+    // Throwing
+    [SerializeField] private float throwForce;
+    private bool hasThrown;
+
+    // Enemies raycast
+    [SerializeField] LayerMask enemyLayerMask;
+    RaycastHit enemyHitInfo;
+    private bool onHitRange;
+
+    // Pulgon raycast
+    [SerializeField] LayerMask pulgonLayerMask;
+    public bool playerOnPulgon;
 
     private void Awake()
     {
@@ -37,58 +49,24 @@ public class AntScript : MonoBehaviour
 
     void Update()
     {
-        print(resourceTrans);
-        managePickUp();
-        manageRaycast();
+        //print(resourceTrans);
+        //print(enemyTrans);
+        
+        rayPosition = new Vector3(transform.position.x, transform.position.y - 0.75f, transform.position.z);
+        raycast();
+        //detectEnemy();
 
-        if (onPickupRange && Input.GetKeyDown(KeyCode.Space))
+        managePickup();
+
+        if (Input.GetKeyDown(KeyCode.Q))
         {
-            dropping = false;
-            pickingUp = true;
-
-            defaultArms.SetActive(false);
-            pickUpArms.SetActive(true);
+            dropResource(true);
         }
-
-        if (pickingUp && Input.GetKeyDown(KeyCode.E))
-        {
-            dropping = true;
-            pickingUp = false;
-
-            defaultArms.SetActive(true);
-            pickUpArms.SetActive(false);
-        }
-        //print(onPickupRange);
     }
-
-    //private void OnTriggerStay(Collider other)
-    //{
-    //    if (other.CompareTag("resource_leaf") || other.CompareTag("resource_water"))
-    //    {
-    //        //onPickupRange = true;
-
-    //        if (pickingUp)
-    //        {
-    //            //print("hoja");
-    //            defaultArms.SetActive(false);
-    //            pickUpArms.SetActive(true);
-
-    //            //pickUpLeaf.SetActive(true);
-    //            //pickUpWater.SetActive(false);
-
-    //            pickingUp = false;
-    //        }
-    //    }
-    //}
-
-    //private void OnTriggerExit(Collider other)
-    //{
-    //    onPickupRange = false;
-    //}
 
     private void moveAnt()
     {
-        Vector3 direction = Vector3.zero;
+        direction = Vector3.zero;
         if (Input.GetKey(KeyCode.W) || Input.GetKey(KeyCode.A) || Input.GetKey(KeyCode.S) || Input.GetKey(KeyCode.D))
         {
             direction.x = Input.GetAxis("Horizontal");
@@ -108,51 +86,164 @@ public class AntScript : MonoBehaviour
 
             float targetAngle = Mathf.Atan2(direction.x, direction.z) * Mathf.Rad2Deg + 180;
             transform.rotation = Quaternion.Euler(0f, targetAngle, 0f);
+
+            if (!moveParticles.isPlaying)
+            {
+                moveParticles.Play();
+            }
         }
         else
         {
             //parar
             rb.linearDamping = 3f;
+            if (moveParticles.isPlaying)
+            {
+                moveParticles.Stop();
+            }
         }
         //print(direction);
     }
 
-    private void managePickUp()
-    {
-        if (pickingUp)
-        {
-            //resource.transform.parent = antHands;
-            resourceTrans.SetParent(antHands);
-            resourceTrans.position = antHands.transform.position;
-            resourceRb.isKinematic = true;
-        }
-
-        if (dropping)
-        {
-            resourceTrans.parent = resourceContainer;
-            resourceRb.isKinematic = false;
-        }
-    }
-
-    private void manageRaycast()
+    private void raycast()
     {
         // Rayo desde el centro hacia delante
-        rayPosition = new Vector3(transform.position.x, transform.position.y - 0.75f, transform.position.z);
         Ray ray = new Ray(rayPosition, transform.TransformDirection(Vector3.back));
-
-        Debug.DrawRay(rayPosition, transform.TransformDirection(Vector3.back) * 1f, Color.red);
-
-        if (Physics.Raycast(ray, out hitInfo, 1f, layerMask))
+        Debug.DrawRay(rayPosition, transform.TransformDirection(Vector3.back) * 1.5f, Color.green);
+        if (Physics.Raycast(ray, out resourceHitInfo, 1.5f, layerMask))
         {
-            resourceTrans = hitInfo.transform;
-            resourceRb = hitInfo.rigidbody;
             onPickupRange = true;
-            print("Hit something");
+            //print("Hit something");
         }
         else
         {
             onPickupRange = false;
-            print("Hit nothing");
+            //print("Hit nothing");
+        }
+
+
+        // Detectar pulgon
+        //Ray pulgonRay = new Ray(rayPosition, transform.TransformDirection(Vector3.back));
+        if (Physics.Raycast(ray, 1.5f, pulgonLayerMask))
+        {
+            playerOnPulgon = true;
+        }
+        else
+        {
+            playerOnPulgon = false;
+        }
+
+
+        // Detectar enemigo
+        if (Physics.Raycast(ray, out enemyHitInfo, 1.5f, enemyLayerMask))
+        {
+            //onHitRange = true;
+            //print("Hit something");
+
+            // animacion atacar
+            // codigo atacar
+        }
+        else
+        {
+            onHitRange = false;
+            //print("Hit nothing");
+        }
+    }
+
+    //private void detectEnemy()
+    //{
+    //    // Rayo desde el centro hacia delante
+    //    Ray ray = new Ray(rayPosition, transform.TransformDirection(Vector3.back));
+
+    //    Debug.DrawRay(rayPosition, transform.TransformDirection(Vector3.back) * 1.5f, Color.red);
+
+    //    if (Physics.Raycast(ray, out enemyHitInfo, 1.5f, enemyLayerMask))
+    //    {
+    //        //onHitRange = true;
+    //        //print("Hit something");
+
+    //        // animacion atacar
+    //        // codigo atacar
+    //    }
+    //    else
+    //    {
+    //        onHitRange = false;
+    //        //print("Hit nothing");
+    //    }
+    //}
+
+    private void managePickup()
+    {
+        if (onPickupRange && Input.GetKeyDown(KeyCode.Space))
+        {
+            hasThrown = false;
+            if (pickingUp) // si ya tiene un objeto
+            {
+                // soltar objeto 1
+                resourceTrans.parent = resourceContainer;
+                resourceRb.isKinematic = false;
+                resourceCol.enabled = true;
+
+                // establecer nuevo objeto
+                resourceTrans = resourceHitInfo.transform;
+                resourceRb = resourceHitInfo.rigidbody;
+                resourceCol = resourceHitInfo.collider;
+
+                // coger nuevo objeto
+                resourceTrans.SetParent(antHands);
+                resourceTrans.position = antHands.transform.position;
+                resourceRb.isKinematic = true;
+                resourceCol.enabled = false;
+            }
+            else
+            {
+                resourceTrans = resourceHitInfo.transform;
+                resourceRb = resourceHitInfo.rigidbody;
+                resourceCol = resourceHitInfo.collider;
+
+                pickingUp = true;
+
+                resourceTrans.SetParent(antHands);
+                resourceTrans.position = antHands.transform.position;
+                resourceRb.isKinematic = true;
+                resourceCol.enabled = false;
+
+                // animacion idle > pickup
+                defaultArms.SetActive(false);
+                pickUpArms.SetActive(true);
+            }
+        }
+
+        if (pickingUp && Input.GetKeyDown(KeyCode.E))
+        {
+            dropResource();
+        }
+    }
+
+    private void dropResource(bool throwing = false)
+    {
+        pickingUp = false;
+
+        resourceTrans.parent = resourceContainer;
+        resourceRb.isKinematic = false;
+        resourceCol.enabled = true;
+
+        // animacion pickup > idle 
+        defaultArms.SetActive(true);
+        pickUpArms.SetActive(false);
+
+        if (throwing && !hasThrown)
+        {
+            resourceRb.AddForce(transform.TransformDirection(Vector3.back) * throwForce, ForceMode.Impulse);
+            //resourceRb.AddForce(direction * throwForce, ForceMode.Impulse); // fuerza depende de velocidad
+            hasThrown = true;
+        }
+    }
+
+    private void OnCollisionEnter(Collision collision)
+    {
+        if (collision.gameObject.CompareTag("Enemy"))
+        {
+            print("DAMAGE");
         }
     }
 }

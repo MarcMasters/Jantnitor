@@ -8,6 +8,7 @@ TagManager:
   - resource_water
   - arms_pickup
   - arms_default
+  - Enemy
   layers:
   - Default
   - TransparentFX
@@ -15,7 +16,7 @@ TagManager:
   - Resource
   - Water
   - UI
-  - 
+  - Pulgon
   - 
   - 
   - 
