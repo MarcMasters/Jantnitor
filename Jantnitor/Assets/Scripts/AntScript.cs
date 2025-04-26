@@ -1,4 +1,6 @@
+using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.UI;
 
 public class AntScript : MonoBehaviour
 {
@@ -33,13 +35,26 @@ public class AntScript : MonoBehaviour
     RaycastHit enemyHitInfo;
     private bool onHitRange;
 
-    // Pulgon raycast
-    [SerializeField] LayerMask pulgonLayerMask;
-    public bool playerOnPulgon;
+    // Almacenamiento de items en pulgon
+    private PulgonScript pulgon;
+
+    // Inventario
+    private List<Item> inventory = new List<Item>();
+    [SerializeField] private int maxInventory = 4;
+    private int _gotas = 0;
+
+    [SerializeField] private GameObject itemIconPrefab;
+    [SerializeField] private Transform inventoryContent;
+    private List<GameObject> uiInventory;
+
 
     private void Awake()
     {
         rb = GetComponent<Rigidbody>();
+        pulgon = GameObject.FindGameObjectWithTag("Pulgon").GetComponent<PulgonScript>();
+        
+        inventory = new List<Item>();
+        uiInventory = new List<GameObject>();
     }
 
     private void FixedUpdate()
@@ -47,20 +62,45 @@ public class AntScript : MonoBehaviour
         moveAnt();
     }
 
+    public void AddToPlayerInventory(Item item)
+    {
+        // Se añade item a la lista de inventario
+        inventory.Add(item);
+
+        // Se añade icono a la lista de uiInventario
+        GameObject uiItemIcon = Instantiate(itemIconPrefab, inventoryContent); // genera una image hija de inventoryContent
+        Image im = uiItemIcon.GetComponent<Image>();    // image del gameobject
+        im.sprite = item.itemIcon;                      // Cambio del sprite de image por el del item (preasignado)
+        uiInventory.Add(uiItemIcon);                    // Se añade el icono correspondiente a la lista
+
+    }
+
+    public void AddWater(int gotas)
+    {
+        _gotas += gotas;
+    }
+
     void Update()
     {
         //print(resourceTrans);
         //print(enemyTrans);
-        
+
+        //////////// RAYCAST ////////////
+        // rayPosition Se actualiza igual que el movimiento del pj
         rayPosition = new Vector3(transform.position.x, transform.position.y - 0.75f, transform.position.z);
         raycast();
-        //detectEnemy();
 
+        //////////// RECOGIDA ////////////
         managePickup();
-
         if (Input.GetKeyDown(KeyCode.Q))
         {
             dropResource(true);
+        }
+
+        //////////// PULGÓN ////////////
+        if (Input.GetKey(KeyCode.E) && pulgon.playerOn)
+        {
+
         }
     }
 
@@ -106,7 +146,8 @@ public class AntScript : MonoBehaviour
 
     private void raycast()
     {
-        // Rayo desde el centro hacia delante
+        /// Determina si el player está en rango o no (de recoger item, golpear enemigo, etc)
+        
         Ray ray = new Ray(rayPosition, transform.TransformDirection(Vector3.back));
         Debug.DrawRay(rayPosition, transform.TransformDirection(Vector3.back) * 1.5f, Color.green);
         if (Physics.Raycast(ray, out resourceHitInfo, 1.5f, layerMask))
@@ -120,20 +161,7 @@ public class AntScript : MonoBehaviour
             //print("Hit nothing");
         }
 
-
-        // Detectar pulgon
-        //Ray pulgonRay = new Ray(rayPosition, transform.TransformDirection(Vector3.back));
-        if (Physics.Raycast(ray, 1.5f, pulgonLayerMask))
-        {
-            playerOnPulgon = true;
-        }
-        else
-        {
-            playerOnPulgon = false;
-        }
-
-
-        // Detectar enemigo
+        //// Detectar enemigo
         if (Physics.Raycast(ray, out enemyHitInfo, 1.5f, enemyLayerMask))
         {
             //onHitRange = true;
@@ -149,30 +177,33 @@ public class AntScript : MonoBehaviour
         }
     }
 
-    //private void detectEnemy()
-    //{
-    //    // Rayo desde el centro hacia delante
-    //    Ray ray = new Ray(rayPosition, transform.TransformDirection(Vector3.back));
-
-    //    Debug.DrawRay(rayPosition, transform.TransformDirection(Vector3.back) * 1.5f, Color.red);
-
-    //    if (Physics.Raycast(ray, out enemyHitInfo, 1.5f, enemyLayerMask))
-    //    {
-    //        //onHitRange = true;
-    //        //print("Hit something");
-
-    //        // animacion atacar
-    //        // codigo atacar
-    //    }
-    //    else
-    //    {
-    //        onHitRange = false;
-    //        //print("Hit nothing");
-    //    }
-    //}
-
     private void managePickup()
     {
+        // Guardar en inventario
+        if (pickingUp && Input.GetKeyDown(KeyCode.E) && !pulgon.playerOn)
+        {
+            //dropResource();
+
+            // animacion pickup > idle
+            defaultArms.SetActive(true);
+            pickUpArms.SetActive(false);
+
+            if (inventory.Count < maxInventory)
+            {
+                pickingUp = false;
+
+                IInteractable interactable = resourceCol.GetComponent<IInteractable>();
+                if (interactable != null)
+                {
+                    interactable.Interact(this);
+                }
+            }
+            else
+            {
+                Debug.Log("INVENTARIO LLENO");
+            }
+        }
+
         if (onPickupRange && Input.GetKeyDown(KeyCode.Space))
         {
             hasThrown = false;
@@ -187,6 +218,7 @@ public class AntScript : MonoBehaviour
                 resourceTrans = resourceHitInfo.transform;
                 resourceRb = resourceHitInfo.rigidbody;
                 resourceCol = resourceHitInfo.collider;
+                //print(resourceCol.name);
 
                 // coger nuevo objeto
                 resourceTrans.SetParent(antHands);
@@ -196,12 +228,16 @@ public class AntScript : MonoBehaviour
             }
             else
             {
+                // establecer nuevo objeto
                 resourceTrans = resourceHitInfo.transform;
                 resourceRb = resourceHitInfo.rigidbody;
                 resourceCol = resourceHitInfo.collider;
 
+                //if (resourceCol.name == "water(Clone)") print(resourceCol.name);
+
                 pickingUp = true;
 
+                // coger nuevo objeto
                 resourceTrans.SetParent(antHands);
                 resourceTrans.position = antHands.transform.position;
                 resourceRb.isKinematic = true;
@@ -213,28 +249,30 @@ public class AntScript : MonoBehaviour
             }
         }
 
-        if (pickingUp && Input.GetKeyDown(KeyCode.E))
-        {
-            dropResource();
-        }
+
+
+        
     }
 
     private void dropResource(bool throwing = false)
     {
-        pickingUp = false;
-
-        resourceTrans.parent = resourceContainer;
-        resourceRb.isKinematic = false;
-        resourceCol.enabled = true;
-
-        // animacion pickup > idle 
-        defaultArms.SetActive(true);
-        pickUpArms.SetActive(false);
-
-        if (throwing && !hasThrown)
+        if (pickingUp)
         {
-            resourceRb.AddForce(transform.TransformDirection(Vector3.back) * throwForce, ForceMode.Impulse);
-            //resourceRb.AddForce(direction * throwForce, ForceMode.Impulse); // fuerza depende de velocidad
+            pickingUp = false;
+
+            resourceTrans.parent = resourceContainer;
+            resourceRb.isKinematic = false;
+            resourceCol.enabled = true;
+
+            // animacion pickup > idle
+            defaultArms.SetActive(true);
+            pickUpArms.SetActive(false);
+
+            if (throwing && !hasThrown)
+            {
+                resourceRb.AddForce(transform.TransformDirection(Vector3.back) * throwForce, ForceMode.Impulse);
+                //resourceRb.AddForce(direction * throwForce, ForceMode.Impulse); // fuerza depende de velocidad            
+            }
             hasThrown = true;
         }
     }
@@ -246,4 +284,13 @@ public class AntScript : MonoBehaviour
             print("DAMAGE");
         }
     }
+
+    //private void OnTriggerEnter(Collider other)
+    //{
+    //    IInteractable interactable = other.GetComponent<IInteractable>();
+    //    if (interactable != null)
+    //    {
+    //        interactable.Interact(this);
+    //    }
+    //}
 }

@@ -1,7 +1,9 @@
 using UnityEngine;
+using System.Collections.Generic;
 
 public class PulgonScript : MonoBehaviour
 {
+    // Movimiento pulgón (persigue player)
     private Transform playerTransform;
     private Vector3 target;
     [SerializeField] private float moveSpeed = 5f;
@@ -9,14 +11,18 @@ public class PulgonScript : MonoBehaviour
     [SerializeField] private float pulgonYOffset;
 
     private bool grounded = true;
-    //public bool playerOn;
-    private AntScript player;
+    public bool playerOn;
+    //private AntScript player;
 
+    // Inventario
+    private List<GameObject> inventory = new List<GameObject>();
 
     void Start()
     {
+        inventory = new List<GameObject>();
+
         playerTransform = GameObject.FindGameObjectWithTag("Player").GetComponent<Transform>();
-        player = GameObject.FindGameObjectWithTag("Player").GetComponent<AntScript>();
+        //player = GameObject.FindGameObjectWithTag("Player").GetComponent<AntScript>();
     }
 
     void Update()
@@ -37,13 +43,13 @@ public class PulgonScript : MonoBehaviour
             }
         }
 
-        // Sacar pulgon
-        if (grounded && player.playerOnPulgon && Input.GetKeyDown(KeyCode.P))
+        // Sacar pulgon con tecla
+        if (grounded && playerOn && Input.GetKeyDown(KeyCode.E))
         {
             sacarPulgon();
         }
-        // Guardar pulgon
-        else if (!grounded && player.playerOnPulgon && Input.GetKeyDown(KeyCode.P))
+        // Guardar pulgon con tecla
+        else if (!grounded && playerOn && Input.GetKeyDown(KeyCode.E))
         {
             guardarPulgon();
         }
@@ -53,6 +59,11 @@ public class PulgonScript : MonoBehaviour
             guardarPulgon();
         }
     }
+
+    //public void AddToInventory(Item item)
+    //{
+    //    inventory.Add(item);
+    //}
 
     void sacarPulgon()
     {
@@ -66,18 +77,18 @@ public class PulgonScript : MonoBehaviour
         transform.position = new Vector3(transform.position.x, transform.position.y - pulgonYOffset, transform.position.z);
     }
 
-    //private void OnTriggerEnter(Collider other)
-    //{
-    //    if (other.tag == "Player")
-    //    {
-    //        playerOn = true;
-    //    }
-    //}
-    //private void OnTriggerExit(Collider other)
-    //{
-    //    if (other.tag == "Player")
-    //    {
-    //        playerOn = false;
-    //    }
-    //}
+    private void OnTriggerEnter(Collider other)
+    {
+        if (other.tag == "Player")
+        {
+            playerOn = true;
+        }
+    }
+    private void OnTriggerExit(Collider other)
+    {
+        if (other.tag == "Player")
+        {
+            playerOn = false;
+        }
+    }
 }
