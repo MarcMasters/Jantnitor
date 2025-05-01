@@ -23,13 +23,13 @@ Material:
   m_Name: blue
   m_Shader: {fileID: 4800000, guid: 933532a4fcc9baf4fa0491de14d08ed7, type: 3}
   m_Parent: {fileID: 2100000, guid: 254fa5b1d31666f43ac92eec269d177a, type: 2}
-  m_ModifiedSerializedProperties: 2
+  m_ModifiedSerializedProperties: 18
   m_ValidKeywords: []
   m_InvalidKeywords: []
   m_LightmapFlags: 4
   m_EnableInstancingVariants: 0
   m_DoubleSidedGI: 0
-  m_CustomRenderQueue: -1
+  m_CustomRenderQueue: 2000
   stringTagMap:
     RenderType: Opaque
   disabledShaderPasses:
@@ -40,8 +40,10 @@ Material:
     m_TexEnvs: []
     m_Ints: []
     m_Floats:
-    - _Metallic: 0.27
+    - _Metallic: 0.5
+    - _QueueOffset: 0
     - _Smoothness: 1
+    - _SmoothnessTextureChannel: 0
     m_Colors:
     - _BaseColor: {r: 0.27629036, g: 0.7509433, b: 0.72539705, a: 1}
     - _Color: {r: 0.27629033, g: 0.7509433, b: 0.72539705, a: 1}
