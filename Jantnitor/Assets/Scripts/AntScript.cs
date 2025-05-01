@@ -47,11 +47,15 @@ public class AntScript : MonoBehaviour
     [SerializeField] private Transform inventoryContent;
     private List<GameObject> uiInventory;
 
+    // Animaciones
+    private Animator anim;
+
 
     private void Awake()
     {
         rb = GetComponent<Rigidbody>();
         pulgon = GameObject.FindGameObjectWithTag("Pulgon").GetComponent<PulgonScript>();
+        anim = transform.GetChild(0).gameObject.GetComponent<Animator>();
         
         inventory = new List<Item>();
         uiInventory = new List<GameObject>();
@@ -75,10 +79,10 @@ public class AntScript : MonoBehaviour
 
     }
 
-    public void AddWater(int gotas)
-    {
-        _gotas += gotas;
-    }
+    //public void AddWater(int gotas)
+    //{
+    //    _gotas += gotas;
+    //}
 
     void Update()
     {
@@ -98,10 +102,10 @@ public class AntScript : MonoBehaviour
         }
 
         //////////// PULGÓN ////////////
-        if (Input.GetKey(KeyCode.E) && pulgon.playerOn)
-        {
+        //if (Input.GetKey(KeyCode.E) && pulgon.playerOn)
+        //{
 
-        }
+        //}
     }
 
     private void moveAnt()
@@ -127,6 +131,8 @@ public class AntScript : MonoBehaviour
             float targetAngle = Mathf.Atan2(direction.x, direction.z) * Mathf.Rad2Deg + 180;
             transform.rotation = Quaternion.Euler(0f, targetAngle, 0f);
 
+            anim.SetBool("isMoving",true);
+
             if (!moveParticles.isPlaying)
             {
                 moveParticles.Play();
@@ -140,6 +146,8 @@ public class AntScript : MonoBehaviour
             {
                 moveParticles.Stop();
             }
+
+            anim.SetBool("isMoving", false);
         }
         //print(direction);
     }
