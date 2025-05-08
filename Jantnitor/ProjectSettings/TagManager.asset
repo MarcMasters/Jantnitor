@@ -4,12 +4,11 @@
 TagManager:
   serializedVersion: 3
   tags:
-  - resource_leaf
-  - resource_water
   - arms_pickup
   - arms_default
   - Enemy
   - Pulgon
+  - Logic
   layers:
   - Default
   - TransparentFX

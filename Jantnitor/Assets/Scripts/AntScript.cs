@@ -1,6 +1,8 @@
 using System.Collections.Generic;
+using UnityEditor.PackageManager;
 using UnityEngine;
 using UnityEngine.UI;
+using static UnityEditor.Progress;
 
 public class AntScript : MonoBehaviour
 {
@@ -11,8 +13,8 @@ public class AntScript : MonoBehaviour
     [SerializeField] ParticleSystem moveParticles;
 
     // Pickup
-    [SerializeField] private GameObject pickUpArms;
-    [SerializeField] private GameObject defaultArms;
+    //[SerializeField] private GameObject pickUpArms;
+    //[SerializeField] private GameObject defaultArms;
     public bool pickingUp = false;
     private bool onPickupRange = false;
 
@@ -35,19 +37,23 @@ public class AntScript : MonoBehaviour
     RaycastHit enemyHitInfo;
     private bool onHitRange;
 
-    // Almacenamiento de items en pulgon
+    // Almacenamiento de items en pulgon ??
     private PulgonScript pulgon;
 
-    // Inventario
+    // Inventory
     private List<Item> inventory = new List<Item>();
     [SerializeField] private int maxInventory = 4;
-    private int _gotas = 0;
 
     [SerializeField] private GameObject itemIconPrefab;
-    [SerializeField] private Transform inventoryContent;
+    [SerializeField] private GameObject inventoryContent;
     private List<GameObject> uiInventory;
 
-    // Animaciones
+    private bool inventoryOn = false;
+
+    [SerializeField] private ClickDetector click;
+    [SerializeField] private GameObject[] itemPrefabs;
+
+    // Animations
     private Animator anim;
 
 
@@ -56,7 +62,8 @@ public class AntScript : MonoBehaviour
         rb = GetComponent<Rigidbody>();
         pulgon = GameObject.FindGameObjectWithTag("Pulgon").GetComponent<PulgonScript>();
         anim = transform.GetChild(0).gameObject.GetComponent<Animator>();
-        
+        click = GameObject.FindGameObjectWithTag("Logic").GetComponent<ClickDetector>();
+
         inventory = new List<Item>();
         uiInventory = new List<GameObject>();
     }
@@ -71,26 +78,155 @@ public class AntScript : MonoBehaviour
         // Se añade item a la lista de inventario
         inventory.Add(item);
 
-        // Se añade icono a la lista de uiInventario
-        GameObject uiItemIcon = Instantiate(itemIconPrefab, inventoryContent); // genera una image hija de inventoryContent
+        // Se instancia la image y se añade gameobject a la lista de uiInventario
+        GameObject uiItemIcon = Instantiate(itemIconPrefab, inventoryContent.transform); // genera una image hija de inventoryContent
+
         Image im = uiItemIcon.GetComponent<Image>();    // image del gameobject
         im.sprite = item.itemIcon;                      // Cambio del sprite de image por el del item (preasignado)
         uiInventory.Add(uiItemIcon);                    // Se añade el icono correspondiente a la lista
-
     }
 
-    //public void AddWater(int gotas)
-    //{
-    //    _gotas += gotas;
-    //}
+    public void RemoveFromPlayerInventory(Item item)
+    {
+        // El espacio de la lista se queda con null, por tanto elimino todos los null
+        //inventory.RemoveAll(item => item == null);
+
+        // Elimino un item de la lista cualquiera (son todos null)
+        inventory.RemoveAt(0);
+
+        // Se elimina gameobject de la lista de uiInventario y se elimina icono de la interfaz
+        GameObject uiItemIcon = click.clickedGO;
+        Image im = uiItemIcon.GetComponent<Image>();    // image del gameobject
+        uiInventory.Remove(uiItemIcon);                 // Se elimina el icono correspondiente de la lista (gamobject)
+
+        Destroy(uiItemIcon);
+    }
+
+    private void spawnAtHands(GameObject item2spawn = null, RaycastHit? hitInfo = null)
+    {
+        int option = 0;
+        // Spawn desde el inventario
+        if (item2spawn != null)
+        {
+            option = 1;
+        }
+        // Spawn desde mundo/suelo
+        else if (hitInfo.HasValue)
+        {
+            option = 2;
+        }
+        else
+        {
+            Debug.Log("ITEM 2 SPAWN NO DETECTADO");
+            return;
+        }
+
+        if (!pickingUp)
+        {
+            // Establecer nuevo objeto (transform,rb y collider) (en funcion del parámetro de entrada)
+            if (option == 1)
+            {
+                resourceTrans = item2spawn.transform;
+                resourceRb = item2spawn.GetComponent<Rigidbody>();
+                resourceCol = item2spawn.GetComponent<Collider>();
+            }
+            else if (option == 2)
+            {
+                resourceTrans = hitInfo.Value.transform;
+                resourceRb = hitInfo.Value.rigidbody;
+                resourceCol = hitInfo.Value.collider;
+            }
+
+            // Coger nuevo objeto
+            resourceTrans.SetParent(antHands);
+            resourceTrans.position = antHands.transform.position;
+            resourceRb.isKinematic = true;
+            resourceCol.enabled = false;
+
+            pickingUp = true;
+
+            // animacion idle > pickup
+        }
+        else
+        {
+            // soltar objeto 1
+            resourceTrans.parent = resourceContainer;
+            resourceRb.isKinematic = false;
+            resourceCol.enabled = true;
+
+            // Establecer nuevo objeto (transform,rb y collider) (en funcion del parámetro de entrada)
+            if (option == 1)
+            {
+                resourceTrans = item2spawn.transform;
+                resourceRb = item2spawn.GetComponent<Rigidbody>();
+                resourceCol = item2spawn.GetComponent<Collider>();
+            }
+            else if (option == 2)
+            {
+                resourceTrans = hitInfo.Value.transform;
+                resourceRb = hitInfo.Value.rigidbody;
+                resourceCol = hitInfo.Value.collider;
+            }
+
+            // coger nuevo objeto
+            resourceTrans.SetParent(antHands);
+            resourceTrans.position = antHands.transform.position;
+            resourceRb.isKinematic = true;
+            resourceCol.enabled = false;
+        }
+    }
+
+    private void manageItemRemove()
+    {
+        IInteractable interactable = null;
+        GameObject itemToSpawn = null;
+        switch (click.clickedGO.GetComponent<Image>().sprite.name)
+        {
+            case "water":
+                interactable = itemPrefabs[0].GetComponent<Collider>().GetComponent<IInteractable>();
+                itemToSpawn = itemPrefabs[0];
+                break;
+
+            case "leaf":
+                interactable = itemPrefabs[1].GetComponent<Collider>().GetComponent<IInteractable>();
+                itemToSpawn = itemPrefabs[1];
+                break;
+
+            case "trash":
+                interactable = itemPrefabs[2].GetComponent<Collider>().GetComponent<IInteractable>();
+                itemToSpawn = itemPrefabs[2];
+                break;
+
+            default:
+                Debug.Log("Item to remove from inventory not found");
+                break;
+        }
+
+        GameObject spawnedItem = Instantiate(itemToSpawn, resourceContainer.position, Quaternion.identity, resourceContainer);
+        spawnAtHands(spawnedItem);
+
+        // Necesito un iinteractable > Collider del item/prefab > Instantiate item > prefab correcto
+        if (interactable != null)
+        {
+            interactable.Interact(this, 1);
+        }
+    }
 
     void Update()
     {
+        // Imprimir lista de inventory
+        if (Input.GetKeyDown(KeyCode.K))
+        {
+            for (int i = 0; i < inventory.Count; i++)
+            {
+                Debug.Log(inventory[i]);
+            }
+        }
+
         //print(resourceTrans);
         //print(enemyTrans);
 
         //////////// RAYCAST ////////////
-        // rayPosition Se actualiza igual que el movimiento del pj
         rayPosition = new Vector3(transform.position.x, transform.position.y - 0.75f, transform.position.z);
         raycast();
 
@@ -99,6 +235,27 @@ public class AntScript : MonoBehaviour
         if (Input.GetKeyDown(KeyCode.Q))
         {
             dropResource(true);
+        }
+
+        //////////// INVENTARIO ////////////
+        if (Input.GetKeyDown(KeyCode.E) && !pulgon.playerOn)
+        {
+            if (!inventoryOn)
+            {
+                inventoryOn = true;
+                inventoryContent.SetActive(true);
+            }
+            else
+            {
+                inventoryOn = false;
+                inventoryContent.SetActive(false);
+            }
+        }
+
+        // Eliminar item del inventario
+        if (Input.GetMouseButtonDown(0) && click.clickedGO != null)
+        {
+            manageItemRemove();
         }
 
         //////////// PULGÓN ////////////
@@ -188,13 +345,13 @@ public class AntScript : MonoBehaviour
     private void managePickup()
     {
         // Guardar en inventario
-        if (pickingUp && Input.GetKeyDown(KeyCode.E) && !pulgon.playerOn)
+        if (pickingUp && Input.GetKeyDown(KeyCode.Space) && !pulgon.playerOn && !onPickupRange)
         {
             //dropResource();
 
             // animacion pickup > idle
-            defaultArms.SetActive(true);
-            pickUpArms.SetActive(false);
+            //defaultArms.SetActive(true);
+            //pickUpArms.SetActive(false);
 
             if (inventory.Count < maxInventory)
             {
@@ -203,7 +360,7 @@ public class AntScript : MonoBehaviour
                 IInteractable interactable = resourceCol.GetComponent<IInteractable>();
                 if (interactable != null)
                 {
-                    interactable.Interact(this);
+                    interactable.Interact(this,0);
                 }
             }
             else
@@ -212,54 +369,54 @@ public class AntScript : MonoBehaviour
             }
         }
 
-        if (onPickupRange && Input.GetKeyDown(KeyCode.Space))
+        // Recoger item del suelo
+        if (onPickupRange && Input.GetKeyDown(KeyCode.Space) && !pulgon.playerOn)
         {
-            hasThrown = false;
-            if (pickingUp) // si ya tiene un objeto
-            {
-                // soltar objeto 1
-                resourceTrans.parent = resourceContainer;
-                resourceRb.isKinematic = false;
-                resourceCol.enabled = true;
+            hasThrown = false; // puede lanzar al recoger
 
-                // establecer nuevo objeto
-                resourceTrans = resourceHitInfo.transform;
-                resourceRb = resourceHitInfo.rigidbody;
-                resourceCol = resourceHitInfo.collider;
-                //print(resourceCol.name);
+            spawnAtHands(null,resourceHitInfo);
 
-                // coger nuevo objeto
-                resourceTrans.SetParent(antHands);
-                resourceTrans.position = antHands.transform.position;
-                resourceRb.isKinematic = true;
-                resourceCol.enabled = false;
-            }
-            else
-            {
-                // establecer nuevo objeto
-                resourceTrans = resourceHitInfo.transform;
-                resourceRb = resourceHitInfo.rigidbody;
-                resourceCol = resourceHitInfo.collider;
+            // si ya tiene un objeto
+            // o manos vacías
+            //if (!pickingUp)
+            //{
+            //    // establecer nuevo objeto
+            //    resourceTrans = resourceHitInfo.transform;
+            //    resourceRb = resourceHitInfo.rigidbody;
+            //    resourceCol = resourceHitInfo.collider;
 
-                //if (resourceCol.name == "water(Clone)") print(resourceCol.name);
+            //    //if (resourceCol.name == "water(Clone)") print(resourceCol.name);
 
-                pickingUp = true;
+            //    pickingUp = true;
 
-                // coger nuevo objeto
-                resourceTrans.SetParent(antHands);
-                resourceTrans.position = antHands.transform.position;
-                resourceRb.isKinematic = true;
-                resourceCol.enabled = false;
+            //    // coger nuevo objeto
+            //    resourceTrans.SetParent(antHands);
+            //    resourceTrans.position = antHands.transform.position;
+            //    resourceRb.isKinematic = true;
+            //    resourceCol.enabled = false;
 
-                // animacion idle > pickup
-                defaultArms.SetActive(false);
-                pickUpArms.SetActive(true);
-            }
+            //    // animacion idle > pickup
+            //}
+            //else
+            //{
+            //    // soltar objeto 1
+            //    resourceTrans.parent = resourceContainer;
+            //    resourceRb.isKinematic = false;
+            //    resourceCol.enabled = true;
+
+            //    // establecer nuevo objeto
+            //    resourceTrans = resourceHitInfo.transform;
+            //    resourceRb = resourceHitInfo.rigidbody;
+            //    resourceCol = resourceHitInfo.collider;
+            //    //print(resourceCol.name);
+
+            //    // coger nuevo objeto
+            //    resourceTrans.SetParent(antHands);
+            //    resourceTrans.position = antHands.transform.position;
+            //    resourceRb.isKinematic = true;
+            //    resourceCol.enabled = false;
+            //}
         }
-
-
-
-        
     }
 
     private void dropResource(bool throwing = false)
@@ -273,8 +430,8 @@ public class AntScript : MonoBehaviour
             resourceCol.enabled = true;
 
             // animacion pickup > idle
-            defaultArms.SetActive(true);
-            pickUpArms.SetActive(false);
+            //defaultArms.SetActive(true);
+            //pickUpArms.SetActive(false);
 
             if (throwing && !hasThrown)
             {
@@ -292,13 +449,4 @@ public class AntScript : MonoBehaviour
             print("DAMAGE");
         }
     }
-
-    //private void OnTriggerEnter(Collider other)
-    //{
-    //    IInteractable interactable = other.GetComponent<IInteractable>();
-    //    if (interactable != null)
-    //    {
-    //        interactable.Interact(this);
-    //    }
-    //}
 }

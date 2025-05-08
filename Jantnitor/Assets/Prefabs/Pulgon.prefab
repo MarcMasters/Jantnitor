@@ -85,6 +85,7 @@ MonoBehaviour:
   moveSpeed: 2.5
   playerPersonalSpace: 4
   pulgonYOffset: 0
+  playerOn: 0
 --- !u!135 &6975436973277867820
 SphereCollider:
   m_ObjectHideFlags: 0
@@ -104,7 +105,7 @@ SphereCollider:
   m_ProvidesContacts: 0
   m_Enabled: 1
   serializedVersion: 3
-  m_Radius: 2
+  m_Radius: 1.8
   m_Center: {x: 0, y: 0, z: 0}
 --- !u!1 &4665273408682909224
 GameObject:
