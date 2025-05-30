@@ -1,8 +1,7 @@
 using System.Collections.Generic;
-using UnityEditor.PackageManager;
 using UnityEngine;
 using UnityEngine.UI;
-using static UnityEditor.Progress;
+//using UnityEngine.UIElements;
 
 public class AntScript : MonoBehaviour
 {
@@ -13,8 +12,6 @@ public class AntScript : MonoBehaviour
     [SerializeField] ParticleSystem moveParticles;
 
     // Pickup
-    //[SerializeField] private GameObject pickUpArms;
-    //[SerializeField] private GameObject defaultArms;
     public bool pickingUp = false;
     private bool onPickupRange = false;
 
@@ -22,6 +19,7 @@ public class AntScript : MonoBehaviour
     RaycastHit resourceHitInfo;
     [SerializeField] LayerMask layerMask;
     private Vector3 rayPosition;
+    [SerializeField] private Vector3 rayDirection;
     [SerializeField] private Transform antHands;
     [SerializeField] private Transform resourceContainer; // objeto padre en drop
     private Transform resourceTrans;
@@ -32,10 +30,14 @@ public class AntScript : MonoBehaviour
     [SerializeField] private float throwForce;
     private bool hasThrown;
 
-    // Enemies raycast
+    // Combat
+    [SerializeField] private GameObject broomAttackCol;
+
     [SerializeField] LayerMask enemyLayerMask;
     RaycastHit enemyHitInfo;
     private bool onHitRange;
+
+    [SerializeField] Camera mainCamera;
 
     // Almacenamiento de items en pulgon ??
     private PulgonScript pulgon;
@@ -47,21 +49,26 @@ public class AntScript : MonoBehaviour
     [SerializeField] private GameObject itemIconPrefab;
     [SerializeField] private GameObject inventoryContent;
     private List<GameObject> uiInventory;
-
     private bool inventoryOn = false;
 
-    [SerializeField] private ClickDetector click;
+    private ClickDetector click;
     [SerializeField] private GameObject[] itemPrefabs;
 
     // Animations
     private Animator anim;
+    private bool isAttacking;
+    private bool pickUpThrowAnimOn = false;
 
 
     private void Awake()
     {
         rb = GetComponent<Rigidbody>();
-        pulgon = GameObject.FindGameObjectWithTag("Pulgon").GetComponent<PulgonScript>();
-        anim = transform.GetChild(0).gameObject.GetComponent<Animator>();
+        if (GameObject.FindGameObjectWithTag("Pulgon") != null)
+        {
+            pulgon = GameObject.FindGameObjectWithTag("Pulgon").GetComponent<PulgonScript>();
+        }
+        //anim = transform.GetChild(0).gameObject.GetComponent<Animator>();
+        anim = GetComponent<Animator>();
         click = GameObject.FindGameObjectWithTag("Logic").GetComponent<ClickDetector>();
 
         inventory = new List<Item>();
@@ -144,8 +151,9 @@ public class AntScript : MonoBehaviour
             resourceCol.enabled = false;
 
             pickingUp = true;
-
-            // animacion idle > pickup
+            pickUpThrowAnimOn = true;
+            anim.SetBool("hasPicked", true);
+            anim.SetBool("isPicking", true);
         }
         else
         {
@@ -214,28 +222,21 @@ public class AntScript : MonoBehaviour
 
     void Update()
     {
-        // Imprimir lista de inventory
-        if (Input.GetKeyDown(KeyCode.K))
-        {
-            for (int i = 0; i < inventory.Count; i++)
-            {
-                Debug.Log(inventory[i]);
-            }
-        }
-
-        //print(resourceTrans);
-        //print(enemyTrans);
+        //////////// DEBUG //////////////
+        //if (Input.GetKeyDown(KeyCode.K))
+        //{
+        //    for (int i = 0; i < inventory.Count; i++)
+        //    {
+        //        Debug.Log(inventory[i]);
+        //    }
+        //}
 
         //////////// RAYCAST ////////////
-        rayPosition = new Vector3(transform.position.x, transform.position.y - 0.75f, transform.position.z);
+        rayPosition = new Vector3(transform.position.x, transform.position.y + 2.5f, transform.position.z);
         raycast();
 
         //////////// RECOGIDA ////////////
         managePickup();
-        if (Input.GetKeyDown(KeyCode.Q))
-        {
-            dropResource(true);
-        }
 
         //////////// INVENTARIO ////////////
         if (Input.GetKeyDown(KeyCode.E) && !pulgon.playerOn)
@@ -258,6 +259,36 @@ public class AntScript : MonoBehaviour
             manageItemRemove();
         }
 
+        //////////// ATAQUE ////////////
+        if (Input.GetMouseButtonDown(0) && click.clickedGO == null && !isAttacking)
+        {
+            // Mirar en la dirección del click
+            Ray ray = mainCamera.ScreenPointToRay(Input.mousePosition);
+            if (Physics.Raycast(ray, out RaycastHit hit, 100f))
+            {
+                Vector3 targetPosition = hit.point;
+                // Calcular la dirección desde el personaje hacia el punto
+                Vector3 direction = targetPosition - transform.position;
+                direction.y = 0f; // Evitar que gire hacia arriba o abajo
+
+                // Calcular el ángulo con el +180 para compensar el modelo invertido
+                float targetAngle = Mathf.Atan2(direction.x, direction.z) * Mathf.Rad2Deg + 180f;
+
+                // Aplicar la rotación en Y
+                transform.rotation = Quaternion.Euler(0f, targetAngle, 0f);
+            }
+
+            if (!pickingUp)
+            {
+                broomAttack();
+            }
+            else
+            {
+                dropResource(true);
+            }
+        }
+        //print(click.clickedGO);
+
         //////////// PULGÓN ////////////
         //if (Input.GetKey(KeyCode.E) && pulgon.playerOn)
         //{
@@ -268,7 +299,7 @@ public class AntScript : MonoBehaviour
     private void moveAnt()
     {
         direction = Vector3.zero;
-        if (Input.GetKey(KeyCode.W) || Input.GetKey(KeyCode.A) || Input.GetKey(KeyCode.S) || Input.GetKey(KeyCode.D))
+        if ((Input.GetKey(KeyCode.W) || Input.GetKey(KeyCode.A) || Input.GetKey(KeyCode.S) || Input.GetKey(KeyCode.D)) && !isAttacking && !pickUpThrowAnimOn)
         {
             direction.x = Input.GetAxis("Horizontal");
             direction.z = Input.GetAxis("Vertical");
@@ -312,10 +343,12 @@ public class AntScript : MonoBehaviour
     private void raycast()
     {
         /// Determina si el player está en rango o no (de recoger item, golpear enemigo, etc)
+        // Creo un rayo que apunte desde arriba hacia abajo en diagonal para atravesar siempre el collider de los items
         
-        Ray ray = new Ray(rayPosition, transform.TransformDirection(Vector3.back));
-        Debug.DrawRay(rayPosition, transform.TransformDirection(Vector3.back) * 1.5f, Color.green);
-        if (Physics.Raycast(ray, out resourceHitInfo, 1.5f, layerMask))
+        Ray ray = new Ray(rayPosition, transform.TransformDirection(rayDirection));
+        Debug.DrawRay(    rayPosition, transform.TransformDirection(rayDirection) * 1.5f, Color.green);
+
+        if (Physics.Raycast(ray, out resourceHitInfo, 2.5f, layerMask))
         {
             onPickupRange = true;
             //print("Hit something");
@@ -327,7 +360,7 @@ public class AntScript : MonoBehaviour
         }
 
         //// Detectar enemigo
-        if (Physics.Raycast(ray, out enemyHitInfo, 1.5f, enemyLayerMask))
+        if (Physics.Raycast(ray, out enemyHitInfo, 2.5f, enemyLayerMask))
         {
             //onHitRange = true;
             //print("Hit something");
@@ -345,17 +378,14 @@ public class AntScript : MonoBehaviour
     private void managePickup()
     {
         // Guardar en inventario
-        if (pickingUp && Input.GetKeyDown(KeyCode.Space) && !pulgon.playerOn && !onPickupRange)
+        if (pickingUp && Input.GetKeyDown(KeyCode.Space) && !onPickupRange)
         {
             //dropResource();
-
-            // animacion pickup > idle
-            //defaultArms.SetActive(true);
-            //pickUpArms.SetActive(false);
 
             if (inventory.Count < maxInventory)
             {
                 pickingUp = false;
+                anim.SetBool("isPicking", false);
 
                 IInteractable interactable = resourceCol.GetComponent<IInteractable>();
                 if (interactable != null)
@@ -370,52 +400,10 @@ public class AntScript : MonoBehaviour
         }
 
         // Recoger item del suelo
-        if (onPickupRange && Input.GetKeyDown(KeyCode.Space) && !pulgon.playerOn)
+        if (onPickupRange && Input.GetKeyDown(KeyCode.Space))
         {
             hasThrown = false; // puede lanzar al recoger
-
             spawnAtHands(null,resourceHitInfo);
-
-            // si ya tiene un objeto
-            // o manos vacías
-            //if (!pickingUp)
-            //{
-            //    // establecer nuevo objeto
-            //    resourceTrans = resourceHitInfo.transform;
-            //    resourceRb = resourceHitInfo.rigidbody;
-            //    resourceCol = resourceHitInfo.collider;
-
-            //    //if (resourceCol.name == "water(Clone)") print(resourceCol.name);
-
-            //    pickingUp = true;
-
-            //    // coger nuevo objeto
-            //    resourceTrans.SetParent(antHands);
-            //    resourceTrans.position = antHands.transform.position;
-            //    resourceRb.isKinematic = true;
-            //    resourceCol.enabled = false;
-
-            //    // animacion idle > pickup
-            //}
-            //else
-            //{
-            //    // soltar objeto 1
-            //    resourceTrans.parent = resourceContainer;
-            //    resourceRb.isKinematic = false;
-            //    resourceCol.enabled = true;
-
-            //    // establecer nuevo objeto
-            //    resourceTrans = resourceHitInfo.transform;
-            //    resourceRb = resourceHitInfo.rigidbody;
-            //    resourceCol = resourceHitInfo.collider;
-            //    //print(resourceCol.name);
-
-            //    // coger nuevo objeto
-            //    resourceTrans.SetParent(antHands);
-            //    resourceTrans.position = antHands.transform.position;
-            //    resourceRb.isKinematic = true;
-            //    resourceCol.enabled = false;
-            //}
         }
     }
 
@@ -429,9 +417,9 @@ public class AntScript : MonoBehaviour
             resourceRb.isKinematic = false;
             resourceCol.enabled = true;
 
-            // animacion pickup > idle
-            //defaultArms.SetActive(true);
-            //pickUpArms.SetActive(false);
+            pickUpThrowAnimOn = true;
+            anim.SetBool("hasThrown", true);
+            anim.SetBool("isPicking", false);
 
             if (throwing && !hasThrown)
             {
@@ -440,6 +428,36 @@ public class AntScript : MonoBehaviour
             }
             hasThrown = true;
         }
+    }
+
+    private void broomAttack()
+    {
+        isAttacking = true;
+        anim.SetBool("isAttacking", true);
+        //broomAttackCol.SetActive(true);
+    }
+
+    public void setBroomCollider()
+    {
+        broomAttackCol.SetActive(true);
+    }
+
+    public void endBroomAttack()
+    {
+        isAttacking = false;
+        anim.SetBool("isAttacking", false);
+        broomAttackCol.SetActive(false);
+    }
+
+    private void endThrowAnim()
+    {
+        anim.SetBool("hasThrown", false);
+        pickUpThrowAnimOn = false;
+    }
+    private void endPickAnim()
+    {
+        anim.SetBool("hasPicked", false);
+        pickUpThrowAnimOn = false;
     }
 
     private void OnCollisionEnter(Collision collision)

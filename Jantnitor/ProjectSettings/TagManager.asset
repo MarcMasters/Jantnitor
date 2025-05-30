@@ -9,6 +9,7 @@ TagManager:
   - Enemy
   - Pulgon
   - Logic
+  - Hit
   layers:
   - Default
   - TransparentFX
