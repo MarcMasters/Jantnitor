@@ -6,6 +6,7 @@ using UnityEngine.UI;
 public class AntScript : MonoBehaviour
 {
     // Movement
+    [Header("Movement")]
     [SerializeField] private float moveSpeed;
     private Rigidbody rb;
     private Vector3 direction;
@@ -16,6 +17,7 @@ public class AntScript : MonoBehaviour
     private bool onPickupRange = false;
 
     // Resources raycast
+    [Header("Raycast")]
     RaycastHit resourceHitInfo;
     [SerializeField] LayerMask layerMask;
     private Vector3 rayPosition;
@@ -25,24 +27,28 @@ public class AntScript : MonoBehaviour
     private Transform resourceTrans;
     private Rigidbody resourceRb;
     private Collider resourceCol;
+    [SerializeField] private Vector3 rayROffset;
+    [SerializeField] private Vector3 rayLOffset;
 
     // Throwing
+    [Header("Throwing")]
     [SerializeField] private float throwForce;
-    private bool hasThrown;
 
     // Combat
+    [Header("Combat")]
     [SerializeField] private GameObject broomAttackCol;
 
     [SerializeField] LayerMask enemyLayerMask;
     RaycastHit enemyHitInfo;
-    private bool onHitRange;
 
+    [Header("Camera")]
     [SerializeField] Camera mainCamera;
 
     // Almacenamiento de items en pulgon ??
     private PulgonScript pulgon;
 
     // Inventory
+    [Header("Inventory")]
     private List<Item> inventory = new List<Item>();
     [SerializeField] private int maxInventory = 4;
 
@@ -59,6 +65,14 @@ public class AntScript : MonoBehaviour
     private bool isAttacking;
     private bool pickUpThrowAnimOn = false;
 
+    // Smash mecanics
+    [Header("Smash")]
+    [SerializeField] private float targetMashCount = 10f;      // Cuántas veces hay que pulsar
+    [SerializeField] private float mashDecayRate = 2f;         // Cuánto se reduce el progreso por segundo
+    [SerializeField] private Image mashProgressBar;            // Barra de progreso opcional
+    [SerializeField] private Image mashProgressBarBorder;
+    private float mashCount = 0f;
+    private bool smashGameActive;
 
     private void Awake()
     {
@@ -233,10 +247,10 @@ public class AntScript : MonoBehaviour
 
         //////////// RAYCAST ////////////
         rayPosition = new Vector3(transform.position.x, transform.position.y + 2.5f, transform.position.z);
-        raycast();
+        raycastRays();
 
         //////////// RECOGIDA ////////////
-        managePickup();
+        if (Input.GetKeyDown(KeyCode.Space)) managePickup();
 
         //////////// INVENTARIO ////////////
         if (Input.GetKeyDown(KeyCode.E) && !pulgon.playerOn)
@@ -260,6 +274,7 @@ public class AntScript : MonoBehaviour
         }
 
         //////////// ATAQUE ////////////
+        print(click.clickedGO);
         if (Input.GetMouseButtonDown(0) && click.clickedGO == null && !isAttacking)
         {
             // Mirar en la dirección del click
@@ -288,6 +303,10 @@ public class AntScript : MonoBehaviour
             }
         }
         //print(click.clickedGO);
+
+        // Smash game
+        if (smashGameActive) smashGame();
+        //if (resourceHitInfo.collider) if (resourceHitInfo.collider.gameObject.name == "savia") 
 
         //////////// PULGÓN ////////////
         //if (Input.GetKey(KeyCode.E) && pulgon.playerOn)
@@ -340,15 +359,20 @@ public class AntScript : MonoBehaviour
         //print(direction);
     }
 
-    private void raycast()
+    private void raycastRays()
     {
         /// Determina si el player está en rango o no (de recoger item, golpear enemigo, etc)
         // Creo un rayo que apunte desde arriba hacia abajo en diagonal para atravesar siempre el collider de los items
         
-        Ray ray = new Ray(rayPosition, transform.TransformDirection(rayDirection));
-        Debug.DrawRay(    rayPosition, transform.TransformDirection(rayDirection) * 1.5f, Color.green);
+        Ray rayC = new Ray(rayPosition, transform.TransformDirection(rayDirection));
+        Ray rayR = new Ray(rayPosition, transform.TransformDirection(rayDirection + rayROffset));
+        Ray rayL = new Ray(rayPosition, transform.TransformDirection(rayDirection + rayLOffset));
 
-        if (Physics.Raycast(ray, out resourceHitInfo, 2.5f, layerMask))
+        Debug.DrawRay(    rayPosition, transform.TransformDirection(rayDirection) * 1.5f, Color.green);
+        Debug.DrawRay(    rayPosition, transform.TransformDirection(rayDirection + rayROffset) * 1.5f, Color.blue);
+        Debug.DrawRay(    rayPosition, transform.TransformDirection(rayDirection + rayLOffset) * 1.5f, Color.blue);
+
+        if (Physics.Raycast(rayC, out resourceHitInfo, 2.5f, layerMask) || Physics.Raycast(rayR, out resourceHitInfo, 2.5f, layerMask) || Physics.Raycast(rayL, out resourceHitInfo, 2.5f, layerMask))
         {
             onPickupRange = true;
             //print("Hit something");
@@ -359,26 +383,41 @@ public class AntScript : MonoBehaviour
             //print("Hit nothing");
         }
 
-        //// Detectar enemigo
-        if (Physics.Raycast(ray, out enemyHitInfo, 2.5f, enemyLayerMask))
-        {
-            //onHitRange = true;
-            //print("Hit something");
 
-            // animacion atacar
-            // codigo atacar
-        }
-        else
-        {
-            onHitRange = false;
-            //print("Hit nothing");
-        }
+        //// Detectar enemigo (útil para hacer algo al enemigo al acercarte (mordisco))
+        //if (Physics.Raycast(ray, out enemyHitInfo, 2.5f, enemyLayerMask))
+        //{
+        //    //onHitRange = true;
+        //    //print("Hit something");
+
+        //    // animacion atacar
+        //    // codigo atacar
+        //}
+        //else
+        //{
+        //    onHitRange = false;
+        //    //print("Hit nothing");
+        //}
     }
 
     private void managePickup()
     {
-        // Guardar en inventario
-        if (pickingUp && Input.GetKeyDown(KeyCode.Space) && !onPickupRange)
+        if (onPickupRange)
+        {
+            if (resourceHitInfo.collider.gameObject.name == "savia")      // Recoger savia
+            {
+                mashProgressBar.gameObject.SetActive(true);
+                mashProgressBarBorder.gameObject.SetActive(true);
+                smashGameActive = true;
+                mashCount += 1f;
+            }
+            else                                                          // Recoger item del suelo
+            {
+                spawnAtHands(null, resourceHitInfo);
+
+            }
+        }
+        else if (pickingUp)                                     // Guardar en inventario
         {
             //dropResource();
 
@@ -390,7 +429,7 @@ public class AntScript : MonoBehaviour
                 IInteractable interactable = resourceCol.GetComponent<IInteractable>();
                 if (interactable != null)
                 {
-                    interactable.Interact(this,0);
+                    interactable.Interact(this, 0);
                 }
             }
             else
@@ -398,35 +437,24 @@ public class AntScript : MonoBehaviour
                 Debug.Log("INVENTARIO LLENO");
             }
         }
-
-        // Recoger item del suelo
-        if (onPickupRange && Input.GetKeyDown(KeyCode.Space))
-        {
-            hasThrown = false; // puede lanzar al recoger
-            spawnAtHands(null,resourceHitInfo);
-        }
     }
 
     private void dropResource(bool throwing = false)
     {
-        if (pickingUp)
+        pickingUp = false;
+
+        resourceTrans.parent = resourceContainer;
+        resourceRb.isKinematic = false;
+        resourceCol.enabled = true;
+
+        pickUpThrowAnimOn = true;
+        anim.SetBool("hasThrown", true);
+        anim.SetBool("isPicking", false);
+
+        if (throwing)
         {
-            pickingUp = false;
-
-            resourceTrans.parent = resourceContainer;
-            resourceRb.isKinematic = false;
-            resourceCol.enabled = true;
-
-            pickUpThrowAnimOn = true;
-            anim.SetBool("hasThrown", true);
-            anim.SetBool("isPicking", false);
-
-            if (throwing && !hasThrown)
-            {
-                resourceRb.AddForce(transform.TransformDirection(Vector3.back) * throwForce, ForceMode.Impulse);
-                //resourceRb.AddForce(direction * throwForce, ForceMode.Impulse); // fuerza depende de velocidad            
-            }
-            hasThrown = true;
+            resourceRb.AddForce(transform.TransformDirection(Vector3.back) * throwForce, ForceMode.Impulse);
+            //resourceRb.AddForce(direction * throwForce, ForceMode.Impulse); // fuerza depende de velocidad            
         }
     }
 
@@ -465,6 +493,43 @@ public class AntScript : MonoBehaviour
         if (collision.gameObject.CompareTag("Enemy"))
         {
             print("DAMAGE");
+        }
+    }
+
+    private void smashGame()
+    {
+        void endGame()
+        {
+            smashGameActive = false;
+            mashProgressBar.gameObject.SetActive(false);
+            mashProgressBarBorder.gameObject.SetActive(false);
+            mashCount = 0f;
+        }
+
+        // Si no detecta collider (te has alejado de la savia), se desactiva
+        if (!resourceHitInfo.collider) {
+            endGame();
+        }
+
+        // Hacer que el contador baje con el tiempo si no se pulsa
+        if (mashCount > 0)
+        {
+            mashCount -= mashDecayRate * Time.deltaTime;
+            mashCount = Mathf.Max(0f, mashCount); // Evitar valores negativos
+        }
+
+        // Actualizar barra de progreso
+        if (mashProgressBar != null)
+        {
+            mashProgressBar.fillAmount = mashCount / targetMashCount;
+        }
+
+        // Comprobar si se alcanzó el objetivo
+        if (mashCount >= targetMashCount)
+        {
+            GameObject spawnedItem = Instantiate(itemPrefabs[2], resourceContainer.position, Quaternion.identity, resourceContainer);
+            spawnAtHands(spawnedItem);
+            endGame();
         }
     }
 }

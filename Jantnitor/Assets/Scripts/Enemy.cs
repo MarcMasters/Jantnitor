@@ -36,19 +36,19 @@ public class Enemy : MonoBehaviour//, IInteractable
     }
     void Update()
     {
-        if (Input.GetKeyDown(KeyCode.P))
-        {
-            anim.SetBool("isAttacking", true);
-        }
+        //if (Input.GetKeyDown(KeyCode.P))
+        //{
+        //    anim.SetBool("isAttacking", true);
+        //}
 
-        if (Input.GetKey(KeyCode.O))
-        {
-            anim.SetBool("isMoving", true);
-        }
-        else
-        {
-            anim.SetBool("isMoving", false);
-        }
+        //if (Input.GetKey(KeyCode.O))
+        //{
+        //    anim.SetBool("isMoving", true);
+        //}
+        //else
+        //{
+        //    anim.SetBool("isMoving", false);
+        //}
     }
 
     private void EndAttack()

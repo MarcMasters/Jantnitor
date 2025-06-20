@@ -15,7 +15,7 @@ GameObject:
   - component: {fileID: -6495093310439122086}
   - component: {fileID: -7734426045618470706}
   m_Layer: 3
-  m_Name: item_trash
+  m_Name: item_savia
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
